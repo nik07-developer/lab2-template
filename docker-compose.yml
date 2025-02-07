@@ -9,12 +9,99 @@ services:
       POSTGRES_PASSWORD: "postgres"
       POSTGRES_DB: postgres
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - ./db-data:/var/lib/postgresql/data
       - ./postgres/:/docker-entrypoint-initdb.d/
     ports:
-      - "5432:5432"
+      - 8000:5432
+    networks:
+      - db-local
 
-# TODO добавить сервисы
+  gateway:
+    image: ${DOCKER_REGISTRY-}app/gateway
+    restart: always
+    build:
+      context: ./app
+      dockerfile: ./Gateway/Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${BUILD_CONFIGURATION}
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__RatingService=http://rating-service:8050
+      - ConnectionStrings__LibraryService=http://library-service:8060
+      - ConnectionStrings__ReservationService=http://reservation-service:8070
+    ports:
+      - 8080:8080
+    networks:
+      - library-local
+      - reservation-local
+      - rating-local
+
+  library-service:
+    image: ${DOCKER_REGISTRY-}app/library-service
+    restart: always
+    build:
+      context: ./app
+      dockerfile: ./LibraryService/Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${BUILD_CONFIGURATION}
+    environment:
+      - ASPNETCORE_URLS=http://+:8060
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=libraries;Username=program;Password=test
+    ports:
+      - 8060:8060
+    depends_on:
+      - postgres
+    networks:
+      - db-local
+      - library-local
+
+  reservation-service:
+    image: ${DOCKER_REGISTRY-}app/reservation-service
+    restart: always
+    build:
+      context: ./app
+      dockerfile: ./ReservationService/Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${BUILD_CONFIGURATION}
+    environment:
+      - ASPNETCORE_URLS=http://+:8070
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=reservations;Username=program;Password=test
+    ports:
+      - 8070:8070
+    depends_on:
+      - postgres
+    networks:
+      - db-local
+      - reservation-local
+
+  rating-service:
+    image: ${DOCKER_REGISTRY-}app/rating-service
+    restart: always
+    build:
+      context: ./app
+      dockerfile: ./RatingService/Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${BUILD_CONFIGURATION}
+    environment:
+      - ASPNETCORE_URLS=http://+:8050
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=ratings;Username=program;Password=test
+    ports:
+      - 8050:8050
+    depends_on:
+      - postgres
+    networks:
+      - db-local
+      - rating-local
+
+networks:
+  library-local:
+  reservation-local:
+  rating-local:
+  db-local:
+    driver: bridge
 
 volumes:
   db-data:
